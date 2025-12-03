@@ -269,6 +269,79 @@ public class Ministral3Model: Module, LLMModel, KVCacheDimensionProvider {
     }
 }
 
+// Helper structure to handle nested config
+private struct Ministral3ConfigWrapper: Codable {
+    let textConfig: TextConfig
+
+    struct TextConfig: Codable {
+        let hiddenSize: Int
+        let hiddenLayers: Int
+        let intermediateSize: Int
+        let attentionHeads: Int
+        let headDimensions: Int?
+        let rmsNormEps: Float
+        let vocabularySize: Int
+        let kvHeads: Int
+        let maxPositionEmbeddings: Int?
+        let ropeTheta: Float?
+        let ropeTraditional: Bool?
+        let ropeScaling: [String: StringOrNumber]?
+        let ropeParameters: [String: StringOrNumber]?
+        let tieWordEmbeddings: Bool?
+        let layerTypes: [String]?
+        let slidingWindow: Int?
+        let attentionBias: Bool?
+        let mlpBias: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case hiddenSize = "hidden_size"
+            case hiddenLayers = "num_hidden_layers"
+            case intermediateSize = "intermediate_size"
+            case attentionHeads = "num_attention_heads"
+            case headDimensions = "head_dim"
+            case rmsNormEps = "rms_norm_eps"
+            case vocabularySize = "vocab_size"
+            case kvHeads = "num_key_value_heads"
+            case maxPositionEmbeddings = "max_position_embeddings"
+            case ropeTheta = "rope_theta"
+            case ropeTraditional = "rope_traditional"
+            case ropeScaling = "rope_scaling"
+            case ropeParameters = "rope_parameters"
+            case tieWordEmbeddings = "tie_word_embeddings"
+            case layerTypes = "layer_types"
+            case slidingWindow = "sliding_window"
+            case attentionBias = "attention_bias"
+            case mlpBias = "mlp_bias"
+        }
+
+        init(from decoder: Swift.Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            hiddenSize = try container.decode(Int.self, forKey: .hiddenSize)
+            hiddenLayers = try container.decode(Int.self, forKey: .hiddenLayers)
+            intermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
+            attentionHeads = try container.decode(Int.self, forKey: .attentionHeads)
+            headDimensions = try container.decodeIfPresent(Int.self, forKey: .headDimensions)
+            rmsNormEps = try container.decode(Float.self, forKey: .rmsNormEps)
+            vocabularySize = try container.decode(Int.self, forKey: .vocabularySize)
+            kvHeads = try container.decodeIfPresent(Int.self, forKey: .kvHeads) ?? attentionHeads
+            maxPositionEmbeddings = try container.decodeIfPresent(Int.self, forKey: .maxPositionEmbeddings)
+            ropeTheta = try container.decodeIfPresent(Float.self, forKey: .ropeTheta)
+            ropeTraditional = try container.decodeIfPresent(Bool.self, forKey: .ropeTraditional)
+            ropeScaling = try container.decodeIfPresent([String: StringOrNumber].self, forKey: .ropeScaling)
+            ropeParameters = try container.decodeIfPresent([String: StringOrNumber].self, forKey: .ropeParameters)
+            tieWordEmbeddings = try container.decodeIfPresent(Bool.self, forKey: .tieWordEmbeddings)
+            layerTypes = try container.decodeIfPresent([String].self, forKey: .layerTypes)
+            slidingWindow = try container.decodeIfPresent(Int.self, forKey: .slidingWindow)
+            attentionBias = try container.decodeIfPresent(Bool.self, forKey: .attentionBias)
+            mlpBias = try container.decodeIfPresent(Bool.self, forKey: .mlpBias)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case textConfig = "text_config"
+    }
+}
+
 public struct Ministral3Configuration: Codable, Sendable {
 
     var hiddenSize: Int
@@ -344,42 +417,32 @@ public struct Ministral3Configuration: Codable, Sendable {
     }
 
     public init(from decoder: Swift.Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(keyedBy: NestedCodingKeys.self)
+        let textConfig = try container.decode(Ministral3ConfigWrapper.TextConfig.self, forKey: .textConfig)
 
-        hiddenSize = try container.decode(Int.self, forKey: .hiddenSize)
-        hiddenLayers = try container.decode(Int.self, forKey: .hiddenLayers)
-        intermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
-        attentionHeads = try container.decode(Int.self, forKey: .attentionHeads)
-        headDimensions = try container.decodeIfPresent(Int.self, forKey: .headDimensions)
-        rmsNormEps = try container.decode(Float.self, forKey: .rmsNormEps)
-        vocabularySize = try container.decode(Int.self, forKey: .vocabularySize)
-        kvHeads = try container.decodeIfPresent(Int.self, forKey: .kvHeads) ?? attentionHeads
-        maxPositionEmbeddings = try container.decodeIfPresent(
-            Int.self, forKey: .maxPositionEmbeddings)
-        if let ropeTheta = try container.decodeIfPresent(Float.self, forKey: .ropeTheta) {
-            self.ropeTheta = ropeTheta
-        }
-        if let ropeTraditional = try container.decodeIfPresent(Bool.self, forKey: .ropeTraditional)
-        {
-            self.ropeTraditional = ropeTraditional
-        }
-        ropeScaling = try container.decodeIfPresent(
-            [String: StringOrNumber].self, forKey: .ropeScaling)
-        ropeParameters = try container.decodeIfPresent(
-            [String: StringOrNumber].self, forKey: .ropeParameters)
-        if let tieWordEmbeddings = try container.decodeIfPresent(
-            Bool.self, forKey: .tieWordEmbeddings)
-        {
-            self.tieWordEmbeddings = tieWordEmbeddings
-        }
-        layerTypes = try container.decodeIfPresent([String].self, forKey: .layerTypes)
-        slidingWindow = try container.decodeIfPresent(Int.self, forKey: .slidingWindow)
-        if let attentionBias = try container.decodeIfPresent(Bool.self, forKey: .attentionBias) {
-            self.attentionBias = attentionBias
-        }
-        if let mlpBias = try container.decodeIfPresent(Bool.self, forKey: .mlpBias) {
-            self.mlpBias = mlpBias
-        }
+        hiddenSize = textConfig.hiddenSize
+        hiddenLayers = textConfig.hiddenLayers
+        intermediateSize = textConfig.intermediateSize
+        attentionHeads = textConfig.attentionHeads
+        headDimensions = textConfig.headDimensions
+        rmsNormEps = textConfig.rmsNormEps
+        vocabularySize = textConfig.vocabularySize
+        kvHeads = textConfig.kvHeads ?? attentionHeads
+        maxPositionEmbeddings = textConfig.maxPositionEmbeddings
+        ropeTheta = textConfig.ropeTheta ?? 10_000
+        ropeTraditional = textConfig.ropeTraditional ?? false
+        ropeScaling = textConfig.ropeScaling
+        ropeParameters = textConfig.ropeParameters
+        tieWordEmbeddings = textConfig.tieWordEmbeddings ?? true
+        layerTypes = textConfig.layerTypes
+        slidingWindow = textConfig.slidingWindow
+        attentionBias = textConfig.attentionBias ?? false
+        mlpBias = textConfig.mlpBias ?? false
+    }
+
+    // Nested coding keys for handling text_config
+    private enum NestedCodingKeys: String, CodingKey {
+        case textConfig = "text_config"
     }
 }
 
