@@ -219,8 +219,22 @@ public class Ministral3Model: Module, LLMModel, KVCacheDimensionProvider {
     }
 
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
+        // Handle weight key prefixes for multimodal models
+        var processedWeights = weights
+        let prefixesToRemove = ["model.text_model.", "text_model.", "model.language_model.", "language_model."]
+
+        for prefix in prefixesToRemove {
+            for (key, value) in weights {
+                if key.hasPrefix(prefix) {
+                    let newKey = key.replacingOccurrences(of: prefix, with: "model.")
+                    processedWeights[newKey] = value
+                    processedWeights.removeValue(forKey: key)
+                }
+            }
+        }
+
         // Remove unused precomputed rotary frequencies and scales
-        let sanitized = weights.filter {
+        let sanitized = processedWeights.filter {
             !$0.key.contains("self_attn.rotary_emb.inv_freq") &&
             !$0.key.contains("activation_scale")
         }
