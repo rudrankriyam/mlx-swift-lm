@@ -16,6 +16,65 @@ private func getLlama4AttnScale(
     return scaling.expandedDimensions(axis: -1)
 }
 
+/// Custom message generator for Ministral3 that formats messages in Llama-3 style.
+/// Since the model doesn't include a chat template, this formats the prompt manually.
+/// Format: <s>[INST] user_msg [/INST] assistant_response
+private struct Ministral3MessageGenerator: MessageGenerator {
+    init() {}
+
+    func generate(message: Chat.Message) -> Message {
+        // Extract text content
+        let text: String
+        switch message.role {
+        case .system:
+            // System messages are prepended to the first user message
+            text = "<<SYS>>\n\(message.content)\n<</SYS>>\n\n"
+        case .user:
+            text = "[INST] \(message.content) [/INST]"
+        case .assistant:
+            text = " \(message.content)"
+        case .tool:
+            text = "\n\(message.content)"
+        }
+        return ["role": message.role.rawValue, "content": text]
+    }
+
+    func generate(messages: [Chat.Message]) -> [Message] {
+        var formattedMessages: [Message] = []
+        var systemMessage: String = ""
+
+        // Extract system message if present
+        for message in messages {
+            if message.role == .system {
+                systemMessage = message.content
+                break
+            }
+        }
+
+        // Format messages
+        for (index, message) in messages.enumerated() {
+            if message.role == .system {
+                continue // Already handled
+            }
+
+            var formattedMessage = generate(message: message)
+
+            // If this is the first user message and we have a system message, prepend it
+            if message.role == .user && !systemMessage.isEmpty && index == 0 {
+                let systemText = "<<SYS>>\n\(systemMessage)\n<</SYS>>\n\n"
+                if var content = formattedMessage["content"] as? String {
+                    content = content.replacingOccurrences(of: "[INST]", with: "\(systemText)[INST]")
+                    formattedMessage["content"] = content
+                }
+            }
+
+            formattedMessages.append(formattedMessage)
+        }
+
+        return formattedMessages
+    }
+}
+
 private class Attention: Module {
 
     let args: Ministral3Configuration
@@ -285,7 +344,8 @@ public class Ministral3Model: Module, LLMModel, KVCacheDimensionProvider {
             _ = try tokenizer.applyChatTemplate(messages: probe)
             return DefaultMessageGenerator()
         } catch {
-            return NoSystemMessageGenerator()
+            // No chat template - use custom formatter for Llama-3/Ministral-3 format
+            return Ministral3MessageGenerator()
         }
     }
 }
