@@ -220,16 +220,23 @@ public class Ministral3Model: Module, LLMModel, KVCacheDimensionProvider {
 
     public func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         // Handle weight key prefixes for multimodal models
-        var processedWeights = weights
-        let prefixesToRemove = ["model.text_model.", "text_model.", "model.language_model.", "language_model."]
+        // For models converted with text_model prefix (like Ministral3 on HuggingFace),
+        // we need to rename the prefix from "text_model." to "model."
 
-        for prefix in prefixesToRemove {
-            for (key, value) in weights {
-                if key.hasPrefix(prefix) {
-                    let newKey = key.replacingOccurrences(of: prefix, with: "model.")
-                    processedWeights[newKey] = value
-                    processedWeights.removeValue(forKey: key)
-                }
+        var processedWeights = weights
+
+        // Check if weights have text_model prefix and handle it
+        // Convert "text_model.embed_tokens.weight" -> "model.embed_tokens.weight"
+        // Convert "text_model.norm.weight" -> "model.norm.weight"
+        for (key, value) in weights {
+            if key.hasPrefix("text_model.") {
+                let newKey = "model." + key.dropFirst("text_model.".count)
+                processedWeights[newKey] = value
+                processedWeights.removeValue(forKey: key)
+            } else if key.hasPrefix("language_model.") {
+                let newKey = "model." + key.dropFirst("language_model.".count)
+                processedWeights[newKey] = value
+                processedWeights.removeValue(forKey: key)
             }
         }
 
