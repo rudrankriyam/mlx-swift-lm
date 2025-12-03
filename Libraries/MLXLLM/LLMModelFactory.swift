@@ -29,7 +29,7 @@ public class LLMTypeRegistry: ModelTypeRegistry, @unchecked Sendable {
     private static func all() -> [String: @Sendable (URL) throws -> any LanguageModel] {
         [
             "mistral": create(LlamaConfiguration.self, LlamaModel.init),
-            "mistral3": create(Ministral3Configuration.self, Ministral3Model.init),
+            "ministral3": create(Ministral3Configuration.self, Ministral3Model.init),
             "llama": create(LlamaConfiguration.self, LlamaModel.init),
             "phi": create(PhiConfiguration.self, PhiModel.init),
             "phi3": create(Phi3Configuration.self, Phi3Model.init),
