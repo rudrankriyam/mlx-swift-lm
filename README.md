@@ -1,4 +1,6 @@
 # MLX Swift LM
+[![Star History Chart](https://api.star-history.com/svg?repos=rudrankriyam/mlx-swift-lm&type=Date)](https://star-history.com/#rudrankriyam/mlx-swift-lm&Date)
+
 
 MLX Swift LM is a Swift package to build tools and applications with large
 language models (LLMs) and vision language models (VLMs) in [MLX Swift](https://github.com/ml-explore/mlx-swift).
