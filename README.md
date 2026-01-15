@@ -1,5 +1,4 @@
 # MLX Swift LM
-[![Star History Chart](https://api.star-history.com/svg?repos=rudrankriyam/mlx-swift-lm&type=Date)](https://star-history.com/#rudrankriyam/mlx-swift-lm&Date)
 
 
 MLX Swift LM is a Swift package to build tools and applications with large
@@ -68,3 +67,5 @@ Developers can use these examples in their own programs -- just import the swift
 - [MLXLLM](https://swiftpackageindex.com/ml-explore/mlx-swift-lm/main/documentation/mlxllm) -- large language model example implementations
 - [MLXVLM](https://swiftpackageindex.com/ml-explore/mlx-swift-lm/main/documentation/mlxvlm) -- vision language model example implementations
 - [MLXEmbedders](https://swiftpackageindex.com/ml-explore/mlx-swift-lm/main/documentation/mlxembedders) -- popular Encoders / Embedding models example implementations
+
+[![Star History Chart](https://api.star-history.com/svg?repos=rudrankriyam/mlx-swift-lm&type=Date)](https://star-history.com/#rudrankriyam/mlx-swift-lm&Date)
