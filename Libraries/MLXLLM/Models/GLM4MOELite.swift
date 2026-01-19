@@ -182,6 +182,7 @@ class GLM4MoELiteGate: Module {
     let routedScalingFactor: Float
     let nGroup: Int
     let topkGroup: Int
+    let selectExperts: @Sendable (MLXArray, MLXArray) -> (MLXArray, MLXArray)
 
     @ParameterInfo(key: "weight") var weight: MLXArray
     @ParameterInfo(key: "e_score_correction_bias") var eScoreCorrectionBias: MLXArray
@@ -202,37 +203,52 @@ class GLM4MoELiteGate: Module {
         _weight.wrappedValue = zeros([nRoutedExperts, config.hiddenSize])
         _eScoreCorrectionBias.wrappedValue = zeros([nRoutedExperts])
 
+        let topK = config.numExpertsPerTok
+        let normTopkProb = config.normTopkProb
+        let nGroup = config.nGroup
+        let topkGroup = config.topkGroup
+        let routedScalingFactor = config.routedScalingFactor
+
+        let compiledSelect = compile { inputs in
+            let gates = inputs[0]
+            let correctionBias = inputs[1]
+
+            var scores = sigmoid(gates.asType(.float32))
+            let originalScores = scores
+            scores = scores + correctionBias
+            if nGroup > 1 {
+                scores = unflatten(scores, axis: -1, shape: [nGroup, -1])
+                let groupScores = top(scores, k: 2, axis: -1).sum(axis: -1, keepDims: true)
+                let k = nGroup - topkGroup
+                let groupIdx = argPartition(groupScores, kth: k - 1, axis: -2)[.ellipsis, ..<k, 0...]
+                scores = putAlong(
+                    scores, stopGradient(groupIdx), values: MLXArray(0.0), axis: -2)
+                scores = flattened(scores, start: -2, end: -1)
+            }
+
+            let k = topK
+            let inds = argPartition(-scores, kth: k - 1, axis: -1)[.ellipsis, ..<k]
+            var selectedScores = takeAlong(originalScores, inds, axis: -1)
+
+            if topK > 1, normTopkProb {
+                let denominator = selectedScores.sum(axis: -1, keepDims: true)
+                selectedScores = selectedScores / denominator
+            }
+            selectedScores = selectedScores * routedScalingFactor
+
+            return [inds, selectedScores]
+        }
+
+        self.selectExperts = { gates, correctionBias in
+            let outputs = compiledSelect([gates, correctionBias])
+            return (outputs[0], outputs[1])
+        }
+
         super.init()
     }
 
     func callAsFunction(_ x: MLXArray) -> (MLXArray, MLXArray) {
-        let hiddenStates = x.matmul(weight.T)
-        let scores = sigmoid(hiddenStates.asType(.float32))
-
-        let originalScores = scores
-        var selectionScores = scores + eScoreCorrectionBias
-
-        if nGroup > 1 {
-            selectionScores = unflatten(selectionScores, axis: -1, shape: [nGroup, -1])
-            let groupScores = top(selectionScores, k: 2, axis: -1).sum(axis: -1, keepDims: true)
-            let k = nGroup - topkGroup
-            let groupIdx = argPartition(groupScores, kth: k - 1, axis: -2)[.ellipsis, ..<k, 0...]
-            selectionScores = putAlong(
-                selectionScores, stopGradient(groupIdx), values: MLXArray(0.0), axis: -2)
-            selectionScores = flattened(selectionScores, start: -2, end: -1)
-        }
-
-        let k = topK
-        let inds = argPartition(-selectionScores, kth: k - 1, axis: -1)[.ellipsis, ..<k]
-        var selectedScores = takeAlong(originalScores, inds, axis: -1)
-
-        if topK > 1, normTopkProb {
-            let denominator = selectedScores.sum(axis: -1, keepDims: true)
-            selectedScores = selectedScores / denominator
-        }
-        selectedScores = selectedScores * routedScalingFactor
-
-        return (inds, selectedScores)
+        selectExperts(x.matmul(weight.T), eScoreCorrectionBias)
     }
 }
 
