@@ -62,13 +62,17 @@ public class SwitchGLU: Module {
     public func callAsFunction(_ x: MLXArray, _ indices: MLXArray) -> MLXArray {
         var x = MLX.expandedDimensions(x, axes: [-2, -3])
 
-        let doSort = indices.size > 64
+        let doSort = indices.size >= 64
 
         var idx = indices
         var inverseOrder = MLXArray()
 
         if doSort {
             (x, idx, inverseOrder) = gatherSort(x: x, indices: indices)
+        }
+
+        if training {
+            idx = stopGradient(idx)
         }
 
         let xUp = upProj(x, idx, sortedIndices: doSort)
