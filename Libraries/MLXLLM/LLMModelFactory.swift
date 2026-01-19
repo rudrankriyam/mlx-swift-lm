@@ -415,21 +415,30 @@ private struct LLMUserInputProcessor: UserInputProcessor {
     let tokenizer: Tokenizer
     let configuration: ModelConfiguration
     let messageGenerator: MessageGenerator
+    let chatTemplate: String?
 
     internal init(
         tokenizer: any Tokenizer, configuration: ModelConfiguration,
-        messageGenerator: MessageGenerator
+        messageGenerator: MessageGenerator, chatTemplate: String?
     ) {
         self.tokenizer = tokenizer
         self.configuration = configuration
         self.messageGenerator = messageGenerator
+        self.chatTemplate = chatTemplate
     }
 
     func prepare(input: UserInput) throws -> LMInput {
         let messages = messageGenerator.generate(from: input)
         do {
             let promptTokens = try tokenizer.applyChatTemplate(
-                messages: messages, tools: input.tools, additionalContext: input.additionalContext)
+                messages: messages,
+                chatTemplate: chatTemplate.map { .literal($0) },
+                addGenerationPrompt: true,
+                truncation: false,
+                maxLength: nil,
+                tools: input.tools,
+                additionalContext: input.additionalContext
+            )
 
             return LMInput(tokens: MLXArray(promptTokens))
         } catch TokenizerError.missingChatTemplate {
@@ -522,9 +531,19 @@ public final class LLMModelFactory: ModelFactory {
                 DefaultMessageGenerator()
             }
 
+        let chatTemplate: String? = {
+            guard !tokenizer.hasChatTemplate else { return nil }
+            let templateURL = modelDirectory.appending(component: "chat_template.jinja")
+            guard FileManager.default.fileExists(atPath: templateURL.path),
+                let template = try? String(contentsOf: templateURL, encoding: .utf8),
+                !template.isEmpty
+            else { return nil }
+            return template
+        }()
+
         let processor = LLMUserInputProcessor(
             tokenizer: tokenizer, configuration: configuration,
-            messageGenerator: messageGenerator)
+            messageGenerator: messageGenerator, chatTemplate: chatTemplate)
 
         return .init(
             configuration: configuration, model: model, processor: processor, tokenizer: tokenizer)
